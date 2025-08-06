@@ -1,18 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import OfferBanner from '../components/layout/OfferBanner';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import AOSInit from '../components/utils/AOSInit';
 import { motion } from 'framer-motion';
 import PageHeader from '../components/layout/PageHeader';
-import { CheckCircle, Clock, ExternalLink, Plane } from 'lucide-react';
+import { CheckCircle, Clock, ExternalLink } from 'lucide-react';
 import Confetti from 'react-confetti';
 
 const MILESTONES = [
-  'Created',
+  'Label Created',
   'Collected',
   'Departed',
-  'In transit',
+  'Intransit',
   'Arrived at destination',
   'Out for delivery',
   'Delivered'
@@ -24,6 +24,7 @@ export default function Tracking() {
   const [trackingResult, setTrackingResult] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [showFullDetails, setShowFullDetails] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationExiting, setCelebrationExiting] = useState(false);
   const [animatePlane, setAnimatePlane] = useState(false);
 
   const handleTracking = async (e: React.FormEvent) => {
@@ -76,19 +77,22 @@ export default function Tracking() {
 
         if (lastStep?.label === 'Delivered') setShowCelebration(true);
 
+        const afterShipCarrier = info.FWAgentCode?.toLowerCase() || info.Sector?.toLowerCase() || info.AgentCode?.toLowerCase();
+        const afterShipLink = `https://www.aftership.com/track/${afterShipCarrier}/${info.AgentAwbNo}`;
+
         setTrackingData({
           id: info.AWBNo || trackingId.toUpperCase(),
           agentAwbNo: info.AgentAwbNo,
           agentCode: info.AgentCode?.toLowerCase(),
-          status: lastStep?.label || 'In Transit',
+          status: lastStep?.label || 'InTransit',
           origin: info.Sender || '-',
           destination: info.Receiver || '-',
           lastUpdate: `${lastStep?.date || ''} - ${lastStep?.time || ''}`,
           pcs: info.Pcs || '-',
           weight: info.Weight || '-',
           timeline,
-          afterShipLink: `https://www.aftership.com/track/${info.AgentCode?.toLowerCase()}/${info.AgentAwbNo}`,
-          fullHistory: trackList
+          afterShipLink,
+          fullHistory: trackList,
         });
 
         setTrackingResult('success');
@@ -104,7 +108,7 @@ export default function Tracking() {
   };
 
   return (
-    <div className="min-h-screen bg-brand-beige">
+    <div className="min-h-screen bg-brand-beige w-screen">
       <AOSInit />
       <OfferBanner />
       <Navbar />
@@ -113,16 +117,34 @@ export default function Tracking() {
       {showCelebration && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
           <Confetti width={window.innerWidth} height={window.innerHeight} />
-          <div className="bg-white p-8 rounded-lg shadow-lg text-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: celebrationExiting ? 0 : 1, scale: celebrationExiting ? 0.7 : 1 }}
+            transition={{ duration: 0.3 }}
+            className="relative bg-white p-8 rounded-lg shadow-lg text-center max-w-md w-full"
+          >
+            <button
+              onClick={() => {
+                setCelebrationExiting(true);
+                setTimeout(() => {
+                  setShowCelebration(false);
+                  setCelebrationExiting(false);
+                }, 300);
+              }}
+              className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 text-xl"
+              aria-label="Close"
+            >
+              ✖
+            </button>
             <h2 className="text-2xl font-bold text-green-600 mb-2">🎉 Congratulations!</h2>
             <p className="text-lg">Your shipment has been delivered successfully!</p>
             <p className="text-sm text-gray-600">Delivered on: {trackingData?.lastUpdate}</p>
-          </div>
+          </motion.div>
         </div>
       )}
 
       <main className="py-16 bg-white">
-        <div className="container max-w-4xl mx-auto px-4">
+        <div className="container max-w-screen mx-auto px-4">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="bg-white rounded-xl shadow-xl p-8">
             <form onSubmit={handleTracking} className="mb-8">
               <div className="flex gap-4 items-center">
@@ -138,11 +160,7 @@ export default function Tracking() {
                   disabled={trackingResult === 'loading'}
                 >
                   {trackingResult === 'loading' && animatePlane ? (
-                    <motion.div
-                      initial={{ x: 0 }}
-                      animate={{ x: [0, 10, -10, 0] }}
-                      transition={{ repeat: Infinity, duration: 1 }}
-                    >
+                    <motion.div initial={{ x: 0 }} animate={{ x: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 1 }}>
                       <img src="/LOGO.png" alt="Airbest Logo" width={24} height={24} />
                     </motion.div>
                   ) : null}
@@ -156,70 +174,109 @@ export default function Tracking() {
             )}
 
             {trackingResult === 'success' && trackingData && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
-                <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 mb-6">
-                  <div className="text-center mb-6">
-                    <h3 className="text-lg font-semibold text-brand-gray">Shipment #{trackingData.id}</h3>
-                    <p className="text-sm text-gray-500">Last update: {trackingData.lastUpdate}</p>
-                  </div>
-                  <div className="flex flex-col md:flex-row justify-between items-center gap-4 overflow-x-auto">
-                    {trackingData.timeline.map((step: any, index: number) => (
-                      <div key={index} className="text-center min-w-[100px]">
-                        <div className={`w-6 h-6 mx-auto rounded-full flex items-center justify-center text-white transition-all duration-500 ${step.completed ? 'bg-green-500' : 'bg-gray-300'}`}>
-                          {step.completed ? <CheckCircle size={16} /> : <Clock size={16} />}
-                        </div>
-                        <p className="text-xs mt-2 text-gray-600">{step.label}</p>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-6 text-center">
-                    <a
-                      href={trackingData.afterShipLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-blue-600 font-medium hover:underline transition"
-                    >
-                      View Full Tracking on AfterShip <ExternalLink size={16} />
-                    </a>
-                  </div>
-                </div>
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    transition={{ duration: 0.5 }}
+    className="w-full"
+  >
+    {/* ✅ Shipment Summary */}
+    <div className="w-full bg-white border border-gray-200 p-6 rounded-xl shadow-md mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
+        <div>
+          <h2 className="text-2xl font-semibold text-gray-900 mb-1">Shipment Overview</h2>
+          <p className="text-sm text-gray-500">Tracking Number: {trackingData.id}</p>
+        </div>
+        <button
+          onClick={() => setShowFullDetails(true)}
+          className="mt-4 md:mt-0 inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition"
+        >
+          View Full Details
+        </button>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 text-sm text-gray-800">
+        <p><span className="font-semibold">Origin:</span> {trackingData.origin}</p>
+        <p><span className="font-semibold">Destination:</span> {trackingData.destination}</p>
+        <p><span className="font-semibold">Pieces:</span> {trackingData.pcs}</p>
+        <p><span className="font-semibold">Weight:</span> {trackingData.weight}</p>
+        <p><span className="font-semibold">Agent AWB:</span> {trackingData.agentAwbNo}</p>
+      </div>
+    </div>
 
-                {!showFullDetails && (
-                  <div className="text-center">
-                    <button
-                      onClick={() => setShowFullDetails(true)}
-                      className="text-brand-maroon underline font-medium"
-                    >
-                      View Tracking History
-                    </button>
-                  </div>
-                )}
+    {/* ✅ Timeline */}
+    <div className="w-full bg-white border border-gray-200 p-6 rounded-xl shadow-sm mb-8">
+      <h3 className="text-lg font-semibold text-gray-900 mb-4">Shipment Timeline</h3>
+      <div className="relative border-l-2 border-gray-300 pl-6 space-y-8">
+        {trackingData.timeline.map((step, index) => (
+          <div key={index} className="relative">
+            {/* Dot */}
+            <div className={`absolute left-[-14px] top-1.5 w-3 h-3 rounded-full border-2 ${step.completed ? 'bg-green-500 border-green-500' : 'bg-gray-300 border-gray-300'}`} />
+            
+            {/* Content */}
+            <div>
+              <p className="font-medium text-gray-800">{step.label}</p>
+              <p className="text-xs text-gray-500">{step.location} • {step.date} {step.time}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
 
-                {showFullDetails && (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }} className="bg-gray-100 p-6 rounded-lg border">
-                    <h4 className="text-lg font-semibold mb-4">Shipment Details</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-6">
-                      <p><strong>Status:</strong> {trackingData.status}</p>
-                      <p><strong>Tracking ID:</strong> {trackingData.id}</p>
-                      <p><strong>Origin:</strong> {trackingData.origin}</p>
-                      <p><strong>Destination:</strong> {trackingData.destination}</p>
-                      <p><strong>No. of Pieces:</strong> {trackingData.pcs}</p>
-                      <p><strong>Weight:</strong> {trackingData.weight}</p>
-                      <p><strong>Agent AWB:</strong> {trackingData.agentAwbNo}</p>
-                    </div>
-                    <h5 className="text-md font-semibold mb-2">Full Tracking Events</h5>
-                    <ul className="space-y-2 text-sm">
-                      {trackingData.fullHistory.map((item: any, idx: number) => (
-                        <li key={idx} className="border-b pb-2">
-                          <strong>{item.MilestoneDesc}</strong> at {item.Location} on {item.Transdate} {item.TransTime}
-                          {item.Remarks && <p className="text-xs text-gray-500">Remarks: {item.Remarks}</p>}
-                        </li>
-                      ))}
-                    </ul>
-                  </motion.div>
-                )}
-              </motion.div>
-            )}
+    {/* ✅ External Link */}
+    <div className="text-center mb-10">
+     
+      <a
+        href={trackingData.afterShipLink}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-blue-600 font-medium hover:underline inline-flex items-center gap-2"
+      >
+        View on AfterShip <ExternalLink size={16} />
+      </a>
+    </div>
+
+    {/* ✅ Modal */}
+    {showFullDetails && (
+      <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-white max-w-3xl w-full rounded-lg shadow-xl p-6 relative"
+        >
+          <button
+            onClick={() => setShowFullDetails(false)}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl"
+          >
+            ×
+          </button>
+
+          <h4 className="text-xl font-semibold mb-4">Full Shipment Details</h4>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm text-gray-700 mb-6">
+            <p><strong>Status:</strong> {trackingData.status}</p>
+            <p><strong>ID:</strong> {trackingData.id}</p>
+            <p><strong>Origin:</strong> {trackingData.origin}</p>
+            <p><strong>Destination:</strong> {trackingData.destination}</p>
+            <p><strong>Pieces:</strong> {trackingData.pcs}</p>
+            <p><strong>Weight:</strong> {trackingData.weight}</p>
+            <p><strong>Agent AWB:</strong> {trackingData.agentAwbNo}</p>
+          </div>
+
+          <h5 className="text-md font-semibold mb-2">Tracking History</h5>
+          <div className="max-h-64 overflow-y-auto space-y-3 text-sm">
+            {trackingData.fullHistory.map((item, idx) => (
+              <div key={idx} className="border-b pb-2">
+                <p><strong>{item.MilestoneDesc}</strong> at {item.Location}</p>
+                <p className="text-xs text-gray-500">{item.Transdate} {item.TransTime}</p>
+                {item.Remarks && <p className="text-xs text-gray-400 italic">Remarks: {item.Remarks}</p>}
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      </div>
+    )}
+  </motion.div>
+)}
+
           </motion.div>
         </div>
       </main>
